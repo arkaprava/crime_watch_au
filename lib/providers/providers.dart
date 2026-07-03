@@ -1,0 +1,79 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+
+import '../models/crime_incident.dart';
+import '../repositories/crime_repository.dart';
+
+final crimeRepositoryProvider = Provider<CrimeRepository>((ref) {
+  return CrimeRepository(createGraphQLClient());
+});
+
+/// Active crime-type / date-range filters.
+class FiltersNotifier extends Notifier<IncidentFilters> {
+  @override
+  IncidentFilters build() => const IncidentFilters();
+
+  void toggleType(CrimeType type) {
+    final types = Set<CrimeType>.from(state.types);
+    if (!types.remove(type)) types.add(type);
+    state = state.copyWith(types: types);
+  }
+
+  void setDateRange(DateTime? from, DateTime? to) {
+    state = state.copyWith(from: () => from, to: () => to);
+  }
+
+  void clear() => state = const IncidentFilters();
+}
+
+final filtersProvider = NotifierProvider<FiltersNotifier, IncidentFilters>(
+  FiltersNotifier.new,
+);
+
+/// The currently visible map region; updated (debounced) as the camera moves.
+class ViewportNotifier extends Notifier<GeoBounds?> {
+  @override
+  GeoBounds? build() => null;
+
+  void update(GeoBounds bounds) => state = bounds;
+}
+
+final viewportProvider = NotifierProvider<ViewportNotifier, GeoBounds?>(
+  ViewportNotifier.new,
+);
+
+/// Incidents for the current viewport and filters.
+final incidentsProvider = FutureProvider<List<CrimeIncident>>((ref) async {
+  final bounds = ref.watch(viewportProvider);
+  final filters = ref.watch(filtersProvider);
+  if (bounds == null) return const [];
+  final repository = ref.watch(crimeRepositoryProvider);
+  return repository.fetchIncidents(bounds: bounds, filters: filters);
+});
+
+/// Best-effort user location; null when permission is denied or
+/// location services are unavailable.
+final userLocationProvider = FutureProvider<Position?>((ref) async {
+  try {
+    if (!await Geolocator.isLocationServiceEnabled()) return null;
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return null;
+    }
+
+    return await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.medium,
+        timeLimit: Duration(seconds: 8),
+      ),
+    );
+  } catch (_) {
+    return null;
+  }
+});
+
