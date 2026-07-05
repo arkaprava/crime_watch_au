@@ -48,9 +48,19 @@ class IncidentCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      incident.type.label,
+                      incident.title,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      incident.type.label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: incident.type.color,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -73,7 +83,10 @@ class IncidentCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _SeverityBadge(severity: incident.severity, color: incident.type.color),
+                  _SeverityBadge(
+                    severity: incident.severityRank,
+                    color: incident.type.color,
+                  ),
                   if (showChevron) ...[
                     const SizedBox(height: 8),
                     Icon(
@@ -100,7 +113,8 @@ class _SeverityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = switch (severity) {
-      >= 3 => 'High',
+      >= 4 => 'Critical',
+      3 => 'High',
       2 => 'Medium',
       _ => 'Low',
     };

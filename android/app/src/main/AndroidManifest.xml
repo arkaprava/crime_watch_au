@@ -5,7 +5,8 @@
     <application
         android:label="Crime Watch AU"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <!-- TODO: Replace with a real Google Maps API key
              (https://developers.google.com/maps/documentation/android-sdk/get-api-key) -->
         <meta-data

@@ -1,31 +1,69 @@
-/// GraphQL documents for the crime incident service.
-///
-/// Written against the assumed schema below; adjust the field names once the
-/// real service schema is confirmed:
-///
-///   type Incident {
-///     id: ID!
-///     type: String!
-///     description: String
-///     latitude: Float!
-///     longitude: Float!
-///     suburb: String
-///     state: String
-///     occurredAt: DateTime!
-///     severity: Int
-///   }
-const String incidentsQuery = r'''
-query Incidents($bbox: BBoxInput!, $types: [String!], $from: DateTime, $to: DateTime) {
-  incidents(bbox: $bbox, types: $types, from: $from, to: $to) {
-    id
-    type
-    description
-    latitude
-    longitude
-    suburb
+// GraphQL documents for the Crime Service API.
+
+const String crimeIncidentFields = r'''
+fragment CrimeIncidentFields on CrimeIncident {
+  id
+  title
+  description
+  crimeType
+  severity
+  status
+  occurredAt
+  reportedAt
+  location {
+    address
+    city
     state
-    occurredAt
-    severity
+    country
+    postalCode
+    coordinates {
+      latitude
+      longitude
+    }
   }
 }
 ''';
+
+const String crimesNearLocationQuery = r'''
+query CrimesNearLocation(
+  $latitude: Float!
+  $longitude: Float!
+  $radiusKm: Float!
+  $state: String
+) {
+  crimesNearLocation(
+    latitude: $latitude
+    longitude: $longitude
+    radiusKm: $radiusKm
+    state: $state
+  ) {
+    ...CrimeIncidentFields
+  }
+}
+''';
+
+const String crimeIncidentsQuery = r'''
+query CrimeIncidents(
+  $city: String
+  $state: String
+  $crimeType: CrimeType
+  $status: CrimeStatus
+  $limit: Int
+  $offset: Int
+) {
+  crimeIncidents(
+    city: $city
+    state: $state
+    crimeType: $crimeType
+    status: $status
+    limit: $limit
+    offset: $offset
+  ) {
+    ...CrimeIncidentFields
+  }
+}
+''';
+
+/// Combined document used by the repository (fragment + location query).
+const String crimesNearLocationDocument =
+    '$crimeIncidentFields\n$crimesNearLocationQuery';

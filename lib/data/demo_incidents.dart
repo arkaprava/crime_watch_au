@@ -1,12 +1,13 @@
 import '../models/crime_incident.dart';
 
-/// Bundled sample incidents around Sydney used while no real GraphQL
-/// endpoint has been configured (see [AppConfig.isConfigured]).
+/// Bundled sample incidents around Sydney for offline UI testing
+/// (enable with `--dart-define=GRAPHQL_USE_DEMO=true`).
 List<CrimeIncident> buildDemoIncidents() {
   final now = DateTime.now();
   return [
     CrimeIncident(
       id: 'demo-1',
+      title: 'Phone snatch on George Street',
       type: CrimeType.theft,
       description: 'Mobile phone snatched from a pedestrian on George Street.',
       latitude: -33.8712,
@@ -14,10 +15,11 @@ List<CrimeIncident> buildDemoIncidents() {
       suburb: 'Sydney CBD',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(hours: 5)),
-      severity: 2,
+      severity: CrimeSeverity.medium,
     ),
     CrimeIncident(
       id: 'demo-2',
+      title: 'Venue altercation',
       type: CrimeType.assault,
       description: 'Altercation outside a licensed venue reported to police.',
       latitude: -33.8770,
@@ -25,21 +27,23 @@ List<CrimeIncident> buildDemoIncidents() {
       suburb: 'Darlinghurst',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(hours: 14)),
-      severity: 3,
+      severity: CrimeSeverity.high,
     ),
     CrimeIncident(
       id: 'demo-3',
-      type: CrimeType.vehicleCrime,
+      title: 'Vehicle break-in',
+      type: CrimeType.robbery,
       description: 'Car broken into overnight, valuables stolen.',
       latitude: -33.8908,
       longitude: 151.2743,
       suburb: 'Bondi',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(days: 1, hours: 3)),
-      severity: 1,
+      severity: CrimeSeverity.low,
     ),
     CrimeIncident(
       id: 'demo-4',
+      title: 'Residential burglary',
       type: CrimeType.burglary,
       description: 'Residential break and enter via rear window.',
       latitude: -33.8845,
@@ -47,10 +51,11 @@ List<CrimeIncident> buildDemoIncidents() {
       suburb: 'Ultimo',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(days: 2, hours: 8)),
-      severity: 2,
+      severity: CrimeSeverity.medium,
     ),
     CrimeIncident(
       id: 'demo-5',
+      title: 'Station vandalism',
       type: CrimeType.vandalism,
       description: 'Graffiti and property damage at a train station.',
       latitude: -33.8915,
@@ -58,21 +63,23 @@ List<CrimeIncident> buildDemoIncidents() {
       suburb: 'Bondi Junction',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(days: 3)),
-      severity: 1,
+      severity: CrimeSeverity.low,
     ),
     CrimeIncident(
       id: 'demo-6',
-      type: CrimeType.drugs,
+      title: 'Park drug activity',
+      type: CrimeType.drugOffense,
       description: 'Drug-related activity reported near the park entrance.',
       latitude: -33.8593,
       longitude: 151.2153,
       suburb: 'The Rocks',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(days: 4, hours: 6)),
-      severity: 2,
+      severity: CrimeSeverity.medium,
     ),
     CrimeIncident(
       id: 'demo-7',
+      title: 'Shoplifting incident',
       type: CrimeType.theft,
       description: 'Shoplifting incident at a retail store.',
       latitude: -33.9173,
@@ -80,10 +87,11 @@ List<CrimeIncident> buildDemoIncidents() {
       suburb: 'Kensington',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(days: 5, hours: 2)),
-      severity: 1,
+      severity: CrimeSeverity.low,
     ),
     CrimeIncident(
       id: 'demo-8',
+      title: 'Suspicious behaviour',
       type: CrimeType.other,
       description: 'Suspicious behaviour reported by local residents.',
       latitude: -33.8567,
@@ -91,10 +99,11 @@ List<CrimeIncident> buildDemoIncidents() {
       suburb: 'Pyrmont',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(days: 6)),
-      severity: 1,
+      severity: CrimeSeverity.low,
     ),
     CrimeIncident(
       id: 'demo-9',
+      title: 'Beachfront assault',
       type: CrimeType.assault,
       description: 'Verbal threats escalated to physical altercation.',
       latitude: -33.9200,
@@ -102,18 +111,19 @@ List<CrimeIncident> buildDemoIncidents() {
       suburb: 'Coogee',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(days: 7, hours: 10)),
-      severity: 2,
+      severity: CrimeSeverity.medium,
     ),
     CrimeIncident(
       id: 'demo-10',
-      type: CrimeType.vehicleCrime,
+      title: 'Motorcycle theft',
+      type: CrimeType.theft,
       description: 'Motorcycle stolen from a secure car park.',
       latitude: -33.8650,
       longitude: 151.2094,
       suburb: 'Sydney CBD',
       state: 'NSW',
       occurredAt: now.subtract(const Duration(days: 9)),
-      severity: 2,
+      severity: CrimeSeverity.medium,
     ),
   ];
 }

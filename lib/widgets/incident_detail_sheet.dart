@@ -52,9 +52,17 @@ class IncidentDetailSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        incident.type.label,
+                        incident.title,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        incident.type.label,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: incident.type.color,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 2),
