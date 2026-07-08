@@ -3,55 +3,107 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/location_result.dart';
+import '../models/suburb_entry.dart';
+import 'suburb_index.dart';
 
-/// Geocodes Australian suburbs and postcodes via OpenStreetMap Nominatim.
-///
-/// No API key is required. Respect the [usage policy](https://operations.osmfoundation.org/policies/nominatim/)
-/// by keeping request volume low (the UI debounces input).
+/// Local suburb autocomplete backed by a bundled cache, with optional
+/// Nominatim geocoding when a selected suburb lacks coordinates.
 class LocationSearchService {
-  LocationSearchService({http.Client? client}) : _client = client ?? http.Client();
+  LocationSearchService({
+    http.Client? client,
+    SuburbIndex? suburbIndex,
+  })  : _client = client ?? http.Client(),
+        _suburbIndex = suburbIndex ?? SuburbIndex.instance;
 
   final http.Client _client;
+  final SuburbIndex _suburbIndex;
 
   static const _baseUrl = 'https://nominatim.openstreetmap.org/search';
 
+  /// Instant prefix search against the bundled suburb cache.
   Future<List<LocationResult>> search(String query) async {
-    final trimmed = query.trim();
-    if (trimmed.length < 2) return [];
+    return _suburbIndex.searchAsLocationResults(query);
+  }
+
+  /// Resolves coordinates for a suburb selected from autocomplete.
+  Future<LocationResult> resolveSelection(LocationResult result) async {
+    if (!result.needsGeocode) return result;
+
+    final cached = _suburbIndex.findExact(result.title, result.state);
+    if (cached?.hasCoordinates == true) {
+      return _fromSuburbEntry(cached!);
+    }
+
+    return _geocodeSuburb(result.title, result.state);
+  }
+
+  Future<LocationResult> _geocodeSuburb(String suburb, String? state) async {
+    final query = state != null
+        ? '$suburb, $state, Australia'
+        : '$suburb, Australia';
 
     final uri = Uri.parse(_baseUrl).replace(
       queryParameters: {
-        'q': '$trimmed, Australia',
-        'format': 'json',
+        'q': query,
+        'format': 'jsonv2',
         'addressdetails': '1',
         'countrycodes': 'au',
-        'limit': '8',
+        'limit': '5',
       },
     );
 
     final response = await _client.get(
       uri,
-      headers: const {'User-Agent': 'CrimeWatchAU/1.0 (crime-watch-au-app)'},
+      headers: const {
+        'User-Agent': 'CrimeWatchAU/1.0 (crime-watch-au-app)',
+        'Accept-Language': 'en-AU,en',
+      },
     );
 
     if (response.statusCode != 200) {
       throw LocationSearchException('Search failed (${response.statusCode})');
     }
 
-    final results = (jsonDecode(response.body) as List<dynamic>)
-        .cast<Map<String, dynamic>>()
+    final raw = (jsonDecode(response.body) as List<dynamic>)
+        .cast<Map<String, dynamic>>();
+
+    final results = raw
         .map(LocationResult.fromNominatimJson)
+        .where((item) => item.title.isNotEmpty)
         .toList();
 
-    return _dedupe(results);
+    if (results.isEmpty) {
+      throw LocationSearchException('No coordinates found for $suburb');
+    }
+
+    final exact = results.where(
+      (item) => item.title.toLowerCase() == suburb.toLowerCase(),
+    );
+    final match = exact.isNotEmpty ? exact.first : results.first;
+
+    return LocationResult(
+      title: suburb,
+      subtitle: match.subtitle,
+      latitude: match.latitude,
+      longitude: match.longitude,
+      state: state ?? match.state,
+      isSuburbLike: true,
+    );
   }
 
-  List<LocationResult> _dedupe(List<LocationResult> results) {
-    final seen = <String>{};
-    return [
-      for (final result in results)
-        if (seen.add('${result.title}|${result.subtitle}')) result,
+  LocationResult _fromSuburbEntry(SuburbEntry entry) {
+    final subtitleParts = [
+      ?entry.postcode,
+      entry.state,
     ];
+    return LocationResult(
+      title: entry.name,
+      subtitle: subtitleParts.join(' · '),
+      latitude: entry.latitude!,
+      longitude: entry.longitude!,
+      state: entry.state,
+      isSuburbLike: true,
+    );
   }
 }
 

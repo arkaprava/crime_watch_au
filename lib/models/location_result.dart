@@ -5,12 +5,22 @@ class LocationResult {
     required this.subtitle,
     required this.latitude,
     required this.longitude,
+    this.state,
+    this.isSuburbLike = false,
+    this.needsGeocode = false,
   });
 
   final String title;
   final String subtitle;
   final double latitude;
   final double longitude;
+  final String? state;
+  final bool isSuburbLike;
+
+  /// True when coordinates must be resolved after the user selects a suburb.
+  final bool needsGeocode;
+
+  bool get hasCoordinates => !needsGeocode;
 
   factory LocationResult.fromNominatimJson(Map<String, dynamic> json) {
     final address = json['address'] as Map<String, dynamic>? ?? {};
@@ -40,6 +50,8 @@ class LocationResult {
           : subtitleParts.join(' · '),
       latitude: double.parse(json['lat'] as String),
       longitude: double.parse(json['lon'] as String),
+      state: state,
+      isSuburbLike: _isSuburbLikeResult(json),
     );
   }
 
@@ -68,5 +80,27 @@ class LocationResult {
       'Australian Capital Territory': 'ACT',
     };
     return abbreviations[state] ?? state;
+  }
+
+  static bool _isSuburbLikeResult(Map<String, dynamic> json) {
+    const suburbTypes = {
+      'suburb',
+      'town',
+      'village',
+      'hamlet',
+      'city',
+      'municipality',
+      'locality',
+      'neighbourhood',
+    };
+    final addressType = json['addresstype'] as String?;
+    if (addressType != null && suburbTypes.contains(addressType)) return true;
+    final placeClass = json['class'] as String?;
+    final placeType = json['type'] as String?;
+    return placeClass == 'place' &&
+        (placeType == 'suburb' ||
+            placeType == 'town' ||
+            placeType == 'village' ||
+            placeType == 'city');
   }
 }

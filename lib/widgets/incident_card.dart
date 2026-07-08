@@ -70,6 +70,18 @@ class IncidentCard extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    if (incident.isAggregate && incident.offenceCount != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '${incident.offenceCount} offences · '
+                          '${incident.reportingPeriodLabel ?? incident.reportingPeriod ?? 'aggregate'}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: AppTheme.slate.withValues(alpha: 0.85),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 2),
                     Text(
                       dateFormat.format(incident.occurredAt.toLocal()),

@@ -3,12 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/app_config.dart';
 import 'screens/map_screen.dart';
+import 'services/suburb_index.dart';
 import 'theme/app_theme.dart';
 import 'widgets/marker_icons.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await MarkerIconFactory.preload();
+  await Future.wait([
+    MarkerIconFactory.preload(),
+    SuburbIndex.instance.load(),
+  ]);
   runApp(const ProviderScope(child: CrimeWatchApp()));
 }
 

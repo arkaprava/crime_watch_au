@@ -3,9 +3,17 @@ import 'package:geolocator/geolocator.dart';
 
 import '../models/crime_incident.dart';
 import '../repositories/crime_repository.dart';
+import '../services/crime_query_cache.dart';
+
+final crimeQueryCacheProvider = Provider<CrimeQueryCache>((ref) {
+  return CrimeQueryCache();
+});
 
 final crimeRepositoryProvider = Provider<CrimeRepository>((ref) {
-  return CrimeRepository(createGraphQLClient());
+  return CrimeRepository(
+    createGraphQLClient(),
+    cache: ref.watch(crimeQueryCacheProvider),
+  );
 });
 
 /// Active crime-type / date-range filters.
@@ -42,13 +50,47 @@ final viewportProvider = NotifierProvider<ViewportNotifier, GeoBounds?>(
   ViewportNotifier.new,
 );
 
+/// Suburb/city selected via location search; triggers [crimeIncidents] fetch.
+class ActiveAreaNotifier extends Notifier<ActiveArea?> {
+  @override
+  ActiveArea? build() => null;
+
+  void setArea(String? city, String? stateCode) {
+    if (city == null || city.isEmpty) {
+      state = null;
+      return;
+    }
+    state = ActiveArea(city: city, state: stateCode);
+  }
+
+  void clear() => state = null;
+}
+
+final activeAreaProvider = NotifierProvider<ActiveAreaNotifier, ActiveArea?>(
+  ActiveAreaNotifier.new,
+);
+
 /// Incidents for the current viewport and filters.
 final incidentsProvider = FutureProvider<List<CrimeIncident>>((ref) async {
   final bounds = ref.watch(viewportProvider);
   final filters = ref.watch(filtersProvider);
+  final area = ref.watch(activeAreaProvider);
   if (bounds == null) return const [];
   final repository = ref.watch(crimeRepositoryProvider);
-  return repository.fetchIncidents(bounds: bounds, filters: filters);
+  return repository.fetchIncidents(bounds: bounds, filters: filters, area: area);
+});
+
+/// Incidents for the suburb selected via location search.
+final suburbIncidentsProvider = FutureProvider<List<CrimeIncident>>((ref) async {
+  final area = ref.watch(activeAreaProvider);
+  final filters = ref.watch(filtersProvider);
+  if (area == null || !area.isActive) return const [];
+  final repository = ref.watch(crimeRepositoryProvider);
+  return repository.fetchSuburbIncidents(
+    city: area.city!,
+    state: area.state,
+    filters: filters,
+  );
 });
 
 /// Best-effort user location; null when permission is denied or

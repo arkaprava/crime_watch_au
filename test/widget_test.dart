@@ -51,7 +51,115 @@ void main() {
       expect(incident.type, CrimeType.burglary);
       expect(incident.severity, CrimeSeverity.high);
       expect(incident.suburb, 'Ultimo');
-      expect(incident.hasCoordinates, isTrue);
+      expect(incident.isMappable, isTrue);
+      expect(incident.hasExactCoordinates, isTrue);
+    });
+
+    test('parses suburb aggregate without coordinates', () {
+      final incident = CrimeIncident.fromGraphQl({
+        'id': 'agg-1',
+        'title': 'Arson in Abbotsford',
+        'description': 'Aggregate: 1 offences reported in Mar 1997 (Arson)',
+        'crimeType': 'ARSON',
+        'severity': 'HIGH',
+        'status': 'REPORTED',
+        'granularity': 'SUBURB_AGGREGATE',
+        'geocodeStatus': 'UNRESOLVED',
+        'offenceCount': 1,
+        'reportingPeriod': '1997-03',
+        'source': 'nsw-bocsar-statistics',
+        'occurredAt': '1997-03-31T02:00:00Z',
+        'location': {
+          'city': 'Abbotsford',
+          'state': 'NSW',
+          'country': 'Australia',
+        },
+        'suburbBoundary': {
+          'name': 'Abbotsford',
+          'state': 'NSW',
+        },
+      });
+
+      expect(incident.isAggregate, isTrue);
+      expect(incident.granularity, RecordGranularity.suburbAggregate);
+      expect(incident.geocodeStatus, GeocodeStatus.unresolved);
+      expect(incident.offenceCount, 1);
+      expect(incident.reportingPeriod, '1997-03');
+      expect(incident.isMappable, isFalse);
+      expect(incident.suburb, 'Abbotsford');
+    });
+
+    test('uses suburb boundary centroid when location lacks coordinates', () {
+      final incident = CrimeIncident.fromGraphQl({
+        'id': 'agg-2',
+        'title': 'Theft in Bondi',
+        'crimeType': 'THEFT',
+        'severity': 'MEDIUM',
+        'status': 'REPORTED',
+        'granularity': 'SUBURB_AGGREGATE',
+        'geocodeStatus': 'APPROXIMATE',
+        'occurredAt': '2020-01-01T00:00:00Z',
+        'location': {
+          'city': 'Bondi',
+          'state': 'NSW',
+          'country': 'Australia',
+        },
+        'suburbBoundary': {
+          'name': 'Bondi',
+          'state': 'NSW',
+          'centroid': {'latitude': -33.8915, 'longitude': 151.2767},
+        },
+      });
+
+      expect(incident.isMappable, isTrue);
+      expect(incident.latitude, closeTo(-33.8915, 0.0001));
+      expect(incident.coordinateSource, CoordinateSource.suburbCentroid);
+      expect(incident.showsCoordinateDetails, isFalse);
+    });
+
+    test('showsCoordinateDetails is true for exact incident locations', () {
+      final incident = CrimeIncident.fromGraphQl({
+        'id': 'inc-1',
+        'title': 'Theft',
+        'crimeType': 'THEFT',
+        'severity': 'LOW',
+        'status': 'REPORTED',
+        'granularity': 'INCIDENT',
+        'occurredAt': '2020-01-01T00:00:00Z',
+        'location': {
+          'city': 'Bondi',
+          'state': 'NSW',
+          'country': 'Australia',
+          'coordinates': {'latitude': -33.8915, 'longitude': 151.2767},
+        },
+      });
+
+      expect(incident.showsCoordinateDetails, isTrue);
+    });
+
+    test('withCoordinates preserves aggregate metadata', () {
+      final incident = CrimeIncident(
+        id: 'x',
+        title: 'Arson in Abbotsford',
+        type: CrimeType.arson,
+        occurredAt: DateTime(1997, 3, 31),
+        suburb: 'Abbotsford',
+        state: 'NSW',
+        granularity: RecordGranularity.suburbAggregate,
+        offenceCount: 1,
+        reportingPeriod: '1997-03',
+      );
+
+      final resolved = incident.withCoordinates(
+        -33.85,
+        151.13,
+        resolvedBy: CoordinateSource.geocodedSuburb,
+      );
+
+      expect(resolved.isMappable, isTrue);
+      expect(resolved.offenceCount, 1);
+      expect(resolved.coordinateSource, CoordinateSource.geocodedSuburb);
+      expect(resolved.showsCoordinateDetails, isFalse);
     });
   });
 
@@ -114,6 +222,7 @@ void main() {
         'lat': '-33.8915',
         'lon': '151.2767',
         'display_name': 'Bondi Junction, Waverley, NSW, Australia',
+        'addresstype': 'suburb',
         'address': {
           'suburb': 'Bondi Junction',
           'postcode': '2022',
@@ -125,6 +234,26 @@ void main() {
       expect(result.subtitle, '2022 · NSW');
       expect(result.latitude, closeTo(-33.8915, 0.0001));
       expect(result.longitude, closeTo(151.2767, 0.0001));
+      expect(result.isSuburbLike, isTrue);
+    });
+
+    test('marks administrative suburb results as suburb-like', () {
+      final result = LocationResult.fromNominatimJson({
+        'lat': '-33.8930556',
+        'lon': '151.2633333',
+        'display_name': 'Bondi, NSW, Australia',
+        'addresstype': 'suburb',
+        'class': 'boundary',
+        'type': 'administrative',
+        'address': {
+          'suburb': 'Bondi',
+          'state': 'New South Wales',
+          'postcode': '2026',
+        },
+      });
+
+      expect(result.title, 'Bondi');
+      expect(result.isSuburbLike, isTrue);
     });
 
     test('falls back to display name when suburb is missing', () {

@@ -2,6 +2,62 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../utils/reporting_period.dart';
+
+/// How map coordinates were determined for a record.
+enum CoordinateSource {
+  /// Exact point from the service.
+  location,
+
+  /// Suburb boundary centroid from the service.
+  suburbCentroid,
+
+  /// Client-side geocode of suburb name.
+  geocodedSuburb,
+}
+
+/// Record granularity from the Crime Service.
+enum RecordGranularity {
+  incident('Incident'),
+  suburbAggregate('Suburb aggregate'),
+  districtAggregate('District aggregate'),
+  stateAggregate('State aggregate');
+
+  const RecordGranularity(this.label);
+  final String label;
+
+  static RecordGranularity? fromApi(String? value) {
+    if (value == null) return null;
+    return switch (value.toUpperCase()) {
+      'INCIDENT' => RecordGranularity.incident,
+      'SUBURB_AGGREGATE' => RecordGranularity.suburbAggregate,
+      'DISTRICT_AGGREGATE' => RecordGranularity.districtAggregate,
+      'STATE_AGGREGATE' => RecordGranularity.stateAggregate,
+      _ => null,
+    };
+  }
+}
+
+/// Geocoding quality from the Crime Service.
+enum GeocodeStatus {
+  resolved('Resolved'),
+  unresolved('Unresolved'),
+  approximate('Approximate');
+
+  const GeocodeStatus(this.label);
+  final String label;
+
+  static GeocodeStatus? fromApi(String? value) {
+    if (value == null) return null;
+    return switch (value.toUpperCase()) {
+      'RESOLVED' => GeocodeStatus.resolved,
+      'UNRESOLVED' => GeocodeStatus.unresolved,
+      'APPROXIMATE' => GeocodeStatus.approximate,
+      _ => null,
+    };
+  }
+}
+
 /// Crime categories from the Crime Service GraphQL schema.
 enum CrimeType {
   theft('Theft', Colors.orange),
@@ -40,7 +96,6 @@ enum CrimeType {
     };
   }
 
-  /// GraphQL enum value for [crimeIncidents] filters.
   String get apiValue => switch (this) {
         CrimeType.theft => 'THEFT',
         CrimeType.burglary => 'BURGLARY',
@@ -80,55 +135,115 @@ enum CrimeSeverity {
   }
 }
 
-/// A single crime incident returned by the Crime Service.
+/// A point with latitude and longitude.
+class GeoPoint {
+  const GeoPoint({required this.latitude, required this.longitude});
+
+  final double latitude;
+  final double longitude;
+}
+
+/// A crime record returned by the Crime Service (incident or aggregate).
 class CrimeIncident {
   const CrimeIncident({
     required this.id,
     required this.title,
     required this.type,
-    required this.latitude,
-    required this.longitude,
     required this.occurredAt,
     this.description,
     this.suburb,
     this.state,
+    this.latitude,
+    this.longitude,
     this.severity = CrimeSeverity.low,
     this.status,
+    this.source,
+    this.granularity,
+    this.geocodeStatus,
+    this.offenceCount,
+    this.reportingPeriod,
+    this.suburbCentroid,
+    this.coordinateSource,
   });
 
   final String id;
   final String title;
   final CrimeType type;
   final String? description;
-  final double latitude;
-  final double longitude;
+  final double? latitude;
+  final double? longitude;
   final String? suburb;
   final String? state;
   final DateTime occurredAt;
   final CrimeSeverity severity;
   final String? status;
+  final String? source;
+  final RecordGranularity? granularity;
+  final GeocodeStatus? geocodeStatus;
+  final int? offenceCount;
+  final String? reportingPeriod;
+  final GeoPoint? suburbCentroid;
+  final CoordinateSource? coordinateSource;
 
   /// Parses a [CrimeIncident] node from the Crime Service GraphQL response.
   factory CrimeIncident.fromGraphQl(Map<String, dynamic> json) {
     final location = json['location'] as Map<String, dynamic>?;
     final coordinates = location?['coordinates'] as Map<String, dynamic>?;
+    final boundary = json['suburbBoundary'] as Map<String, dynamic>?;
+    final centroid = boundary?['centroid'] as Map<String, dynamic>?;
+
+    double? lat = (coordinates?['latitude'] as num?)?.toDouble();
+    double? lng = (coordinates?['longitude'] as num?)?.toDouble();
+    CoordinateSource? source;
+    GeoPoint? suburbCentroid;
+
+    if (lat != null && lng != null) {
+      source = CoordinateSource.location;
+    } else if (centroid != null) {
+      lat = (centroid['latitude'] as num?)?.toDouble();
+      lng = (centroid['longitude'] as num?)?.toDouble();
+      if (lat != null && lng != null) {
+        suburbCentroid = GeoPoint(latitude: lat, longitude: lng);
+        source = CoordinateSource.suburbCentroid;
+      }
+    }
 
     return CrimeIncident(
       id: json['id'] as String,
       title: json['title'] as String,
       type: CrimeType.fromApi(json['crimeType'] as String? ?? 'OTHER'),
       description: json['description'] as String?,
-      latitude: (coordinates?['latitude'] as num?)?.toDouble() ?? 0,
-      longitude: (coordinates?['longitude'] as num?)?.toDouble() ?? 0,
-      suburb: location?['city'] as String?,
-      state: location?['state'] as String?,
+      latitude: lat,
+      longitude: lng,
+      suburb: location?['city'] as String? ?? boundary?['name'] as String?,
+      state: location?['state'] as String? ?? boundary?['state'] as String?,
       occurredAt: DateTime.parse(json['occurredAt'] as String),
       severity: CrimeSeverity.fromApi(json['severity'] as String? ?? 'LOW'),
       status: json['status'] as String?,
+      source: json['source'] as String?,
+      granularity: RecordGranularity.fromApi(json['granularity'] as String?),
+      geocodeStatus: GeocodeStatus.fromApi(json['geocodeStatus'] as String?),
+      offenceCount: (json['offenceCount'] as num?)?.toInt(),
+      reportingPeriod: json['reportingPeriod'] as String?,
+      suburbCentroid: suburbCentroid,
+      coordinateSource: source,
     );
   }
 
-  bool get hasCoordinates => latitude != 0 || longitude != 0;
+  bool get isMappable => latitude != null && longitude != null;
+
+  bool get isAggregate =>
+      granularity != null && granularity != RecordGranularity.incident;
+
+  bool get hasExactCoordinates =>
+      coordinateSource == CoordinateSource.location;
+
+  /// Whether the detail UI should show a lat/lng coordinate row.
+  bool get showsCoordinateDetails =>
+      isMappable && granularity != RecordGranularity.suburbAggregate;
+
+  /// Human-readable duration for aggregate reporting periods.
+  String? get reportingPeriodLabel => formatReportingPeriod(reportingPeriod);
 
   String get locationLabel {
     if (suburb != null && state != null) return '$suburb, $state';
@@ -138,6 +253,42 @@ class CrimeIncident {
   String get severityLabel => severity.label;
 
   int get severityRank => severity.rank;
+
+  String? get granularityLabel => granularity?.label;
+
+  String get coordinateLabel => switch (coordinateSource) {
+        CoordinateSource.location => 'Exact location',
+        CoordinateSource.suburbCentroid => 'Suburb centre',
+        CoordinateSource.geocodedSuburb => 'Approximate (suburb)',
+        null => 'Location unavailable',
+      };
+
+  CrimeIncident withCoordinates(
+    double lat,
+    double lng, {
+    required CoordinateSource resolvedBy,
+  }) {
+    return CrimeIncident(
+      id: id,
+      title: title,
+      type: type,
+      occurredAt: occurredAt,
+      description: description,
+      suburb: suburb,
+      state: state,
+      latitude: lat,
+      longitude: lng,
+      severity: severity,
+      status: status,
+      source: source,
+      granularity: granularity,
+      geocodeStatus: geocodeStatus,
+      offenceCount: offenceCount,
+      reportingPeriod: reportingPeriod,
+      suburbCentroid: suburbCentroid,
+      coordinateSource: resolvedBy,
+    );
+  }
 }
 
 /// A geographic bounding box used to query incidents for the visible map area.
@@ -158,7 +309,6 @@ class GeoBounds {
 
   double get centerLongitude => (southWestLng + northEastLng) / 2;
 
-  /// Approximate search radius in km from the map viewport centre to a corner.
   double get radiusKm {
     final distance = _haversineKm(
       centerLatitude,
@@ -192,6 +342,16 @@ double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
 
 double _toRadians(double degrees) => degrees * math.pi / 180;
 
+/// Optional suburb/city filter from location search.
+class ActiveArea {
+  const ActiveArea({this.city, this.state});
+
+  final String? city;
+  final String? state;
+
+  bool get isActive => city != null && city!.isNotEmpty;
+}
+
 /// Active filter selection applied to incident queries.
 class IncidentFilters {
   const IncidentFilters({
@@ -201,12 +361,9 @@ class IncidentFilters {
     this.state,
   });
 
-  /// Empty set means "all types".
   final Set<CrimeType> types;
   final DateTime? from;
   final DateTime? to;
-
-  /// Optional state filter passed to [crimesNearLocation].
   final String? state;
 
   bool get isActive =>

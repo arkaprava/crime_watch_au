@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/crime_incident.dart';
 import '../theme/app_theme.dart';
 
-/// Bottom sheet showing full details for a single incident.
+/// Bottom sheet showing full details for a single incident or aggregate record.
 class IncidentDetailSheet extends StatelessWidget {
   const IncidentDetailSheet({super.key, required this.incident});
 
@@ -41,7 +41,9 @@ class IncidentDetailSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
-                    Icons.shield_moon_outlined,
+                    incident.isAggregate
+                        ? Icons.analytics_outlined
+                        : Icons.shield_moon_outlined,
                     color: incident.type.color,
                     size: 28,
                   ),
@@ -81,23 +83,71 @@ class IncidentDetailSheet extends StatelessWidget {
                 ),
               ],
             ),
+            if (incident.isAggregate || incident.granularityLabel != null) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (incident.granularityLabel != null)
+                    _InfoChip(
+                      icon: Icons.layers_outlined,
+                      label: incident.granularityLabel!,
+                    ),
+                  if (incident.offenceCount != null)
+                    _InfoChip(
+                      icon: Icons.numbers,
+                      label:
+                          '${incident.offenceCount} offence${incident.offenceCount == 1 ? '' : 's'}',
+                    ),
+                  if (incident.reportingPeriodLabel != null)
+                    _InfoChip(
+                      icon: Icons.calendar_month_outlined,
+                      label: incident.reportingPeriodLabel!,
+                    ),
+                  if (incident.geocodeStatus != null)
+                    _InfoChip(
+                      icon: Icons.location_searching,
+                      label: incident.geocodeStatus!.label,
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 20),
-            _DetailRow(
-              icon: Icons.schedule_outlined,
-              label: 'Reported',
-              value: dateFormat.format(incident.occurredAt.toLocal()),
-            ),
-            const SizedBox(height: 10),
-            _DetailRow(
-              icon: Icons.pin_drop_outlined,
-              label: 'Coordinates',
-              value:
-                  '${incident.latitude.toStringAsFixed(4)}, ${incident.longitude.toStringAsFixed(4)}',
-            ),
+            if (incident.granularity == RecordGranularity.suburbAggregate &&
+                incident.reportingPeriodLabel != null)
+              _DetailRow(
+                icon: Icons.date_range_outlined,
+                label: 'Reporting period',
+                value: incident.reportingPeriodLabel!,
+              )
+            else
+              _DetailRow(
+                icon: Icons.schedule_outlined,
+                label: 'Occurred',
+                value: dateFormat.format(incident.occurredAt.toLocal()),
+              ),
+            if (incident.showsCoordinateDetails) ...[
+              const SizedBox(height: 10),
+              _DetailRow(
+                icon: Icons.pin_drop_outlined,
+                label: incident.coordinateLabel,
+                value:
+                    '${incident.latitude!.toStringAsFixed(4)}, ${incident.longitude!.toStringAsFixed(4)}',
+              ),
+            ],
+            if (incident.source != null) ...[
+              const SizedBox(height: 10),
+              _DetailRow(
+                icon: Icons.source_outlined,
+                label: 'Source',
+                value: incident.source!,
+              ),
+            ],
             if (incident.description != null) ...[
               const SizedBox(height: 20),
               Text(
-                'What happened',
+                incident.isAggregate ? 'Summary' : 'What happened',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: AppTheme.navy,
@@ -119,6 +169,35 @@ class IncidentDetailSheet extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.mist,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppTheme.slate),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }

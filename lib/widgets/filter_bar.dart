@@ -41,24 +41,28 @@ class FilterBar extends ConsumerWidget {
     final theme = Theme.of(context);
 
     final chips = <Widget>[
-      FilterChip(
+      _buildFilterChip(
+        context: context,
+        label: filters.from != null && filters.to != null
+            ? '${dateFormat.format(filters.from!)} – ${dateFormat.format(filters.to!)}'
+            : 'Date range',
+        selected: filters.from != null,
+        selectedColor: AppTheme.amber.withValues(alpha: 0.3),
+        checkmarkColor: AppTheme.navy,
         avatar: Icon(
           Icons.calendar_month_outlined,
           size: 18,
           color: filters.from != null ? AppTheme.navy : AppTheme.slate,
         ),
-        label: Text(
-          filters.from != null && filters.to != null
-              ? '${dateFormat.format(filters.from!)} – ${dateFormat.format(filters.to!)}'
-              : 'Date range',
-        ),
-        selected: filters.from != null,
         onSelected: (_) => _pickDateRange(context, ref),
-        selectedColor: AppTheme.amber.withValues(alpha: 0.25),
-        checkmarkColor: AppTheme.navy,
       ),
       for (final type in CrimeType.values)
-        FilterChip(
+        _buildFilterChip(
+          context: context,
+          label: type.label,
+          selected: filters.types.contains(type),
+          selectedColor: type.color.withValues(alpha: 0.22),
+          checkmarkColor: type.color,
           avatar: Container(
             width: 10,
             height: 10,
@@ -67,29 +71,36 @@ class FilterBar extends ConsumerWidget {
               shape: BoxShape.circle,
             ),
           ),
-          label: Text(type.label),
-          selected: filters.types.contains(type),
           onSelected: (_) => ref.read(filtersProvider.notifier).toggleType(type),
-          selectedColor: type.color.withValues(alpha: 0.18),
-          checkmarkColor: type.color,
         ),
       if (filters.isActive)
         ActionChip(
-          avatar: const Icon(Icons.filter_alt_off, size: 16),
-          label: const Text('Clear'),
+          avatar: Icon(Icons.filter_alt_off, size: 16, color: AppTheme.navy),
+          label: Text(
+            'Clear',
+            style: TextStyle(
+              color: AppTheme.navy,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          side: BorderSide(color: AppTheme.slate.withValues(alpha: 0.35)),
           onPressed: () => ref.read(filtersProvider.notifier).clear(),
         ),
     ];
 
     if (compact) {
-      return SizedBox(
-        height: 44,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: EdgeInsets.zero,
-          itemCount: chips.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 8),
-          itemBuilder: (_, index) => chips[index],
+      return SurfaceCard(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: SizedBox(
+          height: 48,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.zero,
+            itemCount: chips.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (_, index) => chips[index],
+          ),
         ),
       );
     }
@@ -124,6 +135,43 @@ class FilterBar extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required BuildContext context,
+    required String label,
+    required bool selected,
+    required Color selectedColor,
+    required Color checkmarkColor,
+    required Widget avatar,
+    required ValueChanged<bool> onSelected,
+  }) {
+    return FilterChip(
+      avatar: avatar,
+      label: Text(
+        label,
+        style: TextStyle(
+          color: selected ? AppTheme.navy : AppTheme.navy.withValues(alpha: 0.85),
+          fontWeight: FontWeight.w600,
+          fontSize: 13,
+        ),
+      ),
+      selected: selected,
+      onSelected: onSelected,
+      backgroundColor: Colors.white,
+      selectedColor: selectedColor,
+      checkmarkColor: checkmarkColor,
+      side: BorderSide(
+        color: selected
+            ? checkmarkColor.withValues(alpha: 0.55)
+            : AppTheme.slate.withValues(alpha: 0.35),
+        width: selected ? 1.5 : 1,
+      ),
+      elevation: selected ? 1 : 0,
+      pressElevation: 2,
+      showCheckmark: selected,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
     );
   }
 }

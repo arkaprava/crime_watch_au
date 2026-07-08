@@ -23,10 +23,10 @@ class IncidentListScreen extends ConsumerWidget {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: const FilterBar(compact: true),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Expanded(
             child: incidents.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -34,7 +34,17 @@ class IncidentListScreen extends ConsumerWidget {
                 icon: Icons.cloud_off_outlined,
                 title: 'Could not load incidents',
                 actionLabel: 'Retry',
-                onAction: () => ref.invalidate(incidentsProvider),
+                onAction: () {
+                  final bounds = ref.read(viewportProvider);
+                  if (bounds != null) {
+                    ref.read(crimeQueryCacheProvider).invalidateViewport(
+                          bounds: bounds,
+                          state: ref.read(filtersProvider).state,
+                          area: ref.read(activeAreaProvider),
+                        );
+                  }
+                  ref.invalidate(incidentsProvider);
+                },
               ),
               data: (items) {
                 if (items.isEmpty) {
@@ -51,6 +61,14 @@ class IncidentListScreen extends ConsumerWidget {
                 return RefreshIndicator(
                   color: AppTheme.amber,
                   onRefresh: () async {
+                    final bounds = ref.read(viewportProvider);
+                    if (bounds != null) {
+                      ref.read(crimeQueryCacheProvider).invalidateViewport(
+                            bounds: bounds,
+                            state: ref.read(filtersProvider).state,
+                            area: ref.read(activeAreaProvider),
+                          );
+                    }
                     ref.invalidate(incidentsProvider);
                     await ref.read(incidentsProvider.future);
                   },

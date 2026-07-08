@@ -50,6 +50,14 @@ class AppConfig {
 
   static const String appName = 'Crime Watch AU';
 
+  /// Continental Australia view shown when the map first loads.
+  static const double australiaCenterLatitude = -25.2744;
+  static const double australiaCenterLongitude = 133.7751;
+  static const double australiaStartupZoom = 4.2;
+
+  /// How long parsed GraphQL crime results stay in the in-app cache.
+  static const Duration graphqlCacheTtl = Duration(minutes: 10);
+
   /// Fallback map centre when the user's location is unavailable (Sydney CBD).
   static const double fallbackLatitude = -33.8688;
   static const double fallbackLongitude = 151.2093;

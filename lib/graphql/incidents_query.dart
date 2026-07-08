@@ -8,6 +8,11 @@ fragment CrimeIncidentFields on CrimeIncident {
   crimeType
   severity
   status
+  source
+  granularity
+  geocodeStatus
+  offenceCount
+  reportingPeriod
   occurredAt
   reportedAt
   location {
@@ -17,6 +22,14 @@ fragment CrimeIncidentFields on CrimeIncident {
     country
     postalCode
     coordinates {
+      latitude
+      longitude
+    }
+  }
+  suburbBoundary {
+    name
+    state
+    centroid {
       latitude
       longitude
     }
@@ -64,6 +77,8 @@ query CrimeIncidents(
 }
 ''';
 
-/// Combined document used by the repository (fragment + location query).
 const String crimesNearLocationDocument =
     '$crimeIncidentFields\n$crimesNearLocationQuery';
+
+const String crimeIncidentsDocument =
+    '$crimeIncidentFields\n$crimeIncidentsQuery';

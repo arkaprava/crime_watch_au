@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:platform_maps_flutter/platform_maps_flutter.dart';
 
 import '../config/app_config.dart';
@@ -14,8 +13,19 @@ import '../widgets/filter_bar.dart';
 import '../widgets/incident_detail_sheet.dart';
 import '../widgets/location_search_bar.dart';
 import '../widgets/marker_icons.dart';
+import '../widgets/suburb_crime_overlay.dart';
 import '../widgets/surface_card.dart';
 import 'incident_list_screen.dart';
+
+void _invalidateIncidentsCache(WidgetRef ref) {
+  final bounds = ref.read(viewportProvider);
+  if (bounds == null) return;
+  ref.read(crimeQueryCacheProvider).invalidateViewport(
+        bounds: bounds,
+        state: ref.read(filtersProvider).state,
+        area: ref.read(activeAreaProvider),
+      );
+}
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -27,7 +37,6 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   PlatformMapController? _controller;
   Timer? _cameraDebounce;
-  bool _centeredOnUser = false;
 
   @override
   void dispose() {
@@ -87,22 +96,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   void _onLocationSelected(LocationResult location) {
+    ref.read(activeAreaProvider.notifier).setArea(
+          location.title,
+          location.state,
+        );
+    ref.invalidate(incidentsProvider);
+    ref.invalidate(suburbIncidentsProvider);
     _animateTo(location.latitude, location.longitude);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Showing ${location.title}'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   Future<void> _openList() async {
     final selected = await Navigator.of(context).push<CrimeIncident>(
       MaterialPageRoute(builder: (_) => const IncidentListScreen()),
     );
-    if (selected != null && _controller != null && mounted) {
-      await _animateTo(selected.latitude, selected.longitude, zoom: 15);
+    if (selected != null && mounted) {
+      if (selected.isMappable && _controller != null) {
+        await _animateTo(selected.latitude!, selected.longitude!, zoom: 15);
+      }
       if (mounted) {
         await IncidentDetailSheet.show(context, selected);
       }
@@ -111,10 +121,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Set<Marker> _buildMarkers(List<CrimeIncident> incidents) {
     return incidents
+        .where((incident) => incident.isMappable)
         .map(
           (incident) => Marker(
             markerId: MarkerId(incident.id),
-            position: LatLng(incident.latitude, incident.longitude),
+            position: LatLng(incident.latitude!, incident.longitude!),
             icon: MarkerIconFactory.iconFor(incident.type),
             onTap: () => IncidentDetailSheet.show(context, incident),
           ),
@@ -126,14 +137,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Widget build(BuildContext context) {
     final incidents = ref.watch(incidentsProvider);
     final theme = Theme.of(context);
-
-    ref.listen<AsyncValue<Position?>>(userLocationProvider, (_, next) {
-      final position = next.value;
-      if (position != null && !_centeredOnUser && _controller != null) {
-        _centeredOnUser = true;
-        _animateTo(position.latitude, position.longitude, zoom: 13);
-      }
-    });
+    final activeArea = ref.watch(activeAreaProvider);
+    final fabBottom = activeArea != null ? 280.0 : 24.0;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -158,10 +163,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           PlatformMap(
             initialCameraPosition: CameraPosition(
               target: LatLng(
-                AppConfig.fallbackLatitude,
-                AppConfig.fallbackLongitude,
+                AppConfig.australiaCenterLatitude,
+                AppConfig.australiaCenterLongitude,
               ),
-              zoom: 13,
+              zoom: AppConfig.australiaStartupZoom,
             ),
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
@@ -212,7 +217,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () => ref.invalidate(incidentsProvider),
+                      onPressed: () {
+                        _invalidateIncidentsCache(ref);
+                        ref.invalidate(incidentsProvider);
+                      },
                       child: const Text('Retry'),
                     ),
                   ],
@@ -220,8 +228,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
           Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            top: 0,
+            child: const SuburbCrimeOverlay(),
+          ),
+          Positioned(
             right: 16,
-            bottom: 24,
+            bottom: fabBottom,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -255,6 +270,7 @@ class _IncidentCountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = incidents.value?.length;
+    final mappable = incidents.value?.where((i) => i.isMappable).length;
     if (count == null) return const SizedBox.shrink();
 
     return Align(
@@ -269,7 +285,9 @@ class _IncidentCountBadge extends StatelessWidget {
             Text(
               count == 0
                   ? 'No incidents in this area'
-                  : '$count incident${count == 1 ? '' : 's'} nearby',
+                  : mappable != null && mappable < count
+                      ? '$count record${count == 1 ? '' : 's'} ($mappable on map)'
+                      : '$count incident${count == 1 ? '' : 's'} nearby',
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

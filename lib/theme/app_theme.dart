@@ -60,8 +60,13 @@ abstract final class AppTheme {
       ),
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        side: BorderSide(color: slate.withValues(alpha: 0.15)),
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        side: BorderSide(color: slate.withValues(alpha: 0.35)),
+        labelStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: navy,
+        ),
+        backgroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 4),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
