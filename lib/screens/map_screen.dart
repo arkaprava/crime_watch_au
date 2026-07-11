@@ -13,6 +13,7 @@ import '../widgets/filter_bar.dart';
 import '../widgets/incident_detail_sheet.dart';
 import '../widgets/location_search_bar.dart';
 import '../widgets/marker_icons.dart';
+import '../widgets/glass_surface.dart';
 import '../widgets/suburb_crime_overlay.dart';
 import '../widgets/surface_card.dart';
 import 'incident_list_screen.dart';
@@ -37,6 +38,14 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   PlatformMapController? _controller;
   Timer? _cameraDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(launchSyncProvider.future);
+    });
+  }
 
   @override
   void dispose() {
@@ -136,6 +145,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final incidents = ref.watch(incidentsProvider);
+    final viewport = ref.watch(viewportProvider);
+    final needsZoomIn =
+        viewport != null && !viewport.supportsNearLocationQuery;
     final theme = Theme.of(context);
     final activeArea = ref.watch(activeAreaProvider);
     final fabBottom = activeArea != null ? 280.0 : 24.0;
@@ -145,12 +157,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
+            GlassSurface(
               padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AppTheme.amber.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
+              borderRadius: BorderRadius.circular(10),
               child: const Icon(Icons.shield_moon, color: AppTheme.navy, size: 20),
             ),
             const SizedBox(width: 10),
@@ -212,7 +221,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Could not load incidents. Check your connection.',
+                        'Could not load incidents. The server may be busy — try zooming in or retry.',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
@@ -222,6 +231,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         ref.invalidate(incidentsProvider);
                       },
                       child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (needsZoomIn && !incidents.isLoading && !incidents.hasError)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 96,
+              child: SurfaceCard(
+                child: Row(
+                  children: [
+                    Icon(Icons.zoom_in, color: theme.colorScheme.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Zoom in to load nearby incidents.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     ),
                   ],
                 ),

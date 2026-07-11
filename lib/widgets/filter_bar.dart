@@ -83,8 +83,8 @@ class FilterBar extends ConsumerWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          backgroundColor: Colors.white,
-          side: BorderSide(color: AppTheme.slate.withValues(alpha: 0.35)),
+          backgroundColor: AppTheme.glassChipFill(theme.brightness),
+          side: BorderSide(color: AppTheme.slate.withValues(alpha: 0.28)),
           onPressed: () => ref.read(filtersProvider.notifier).clear(),
         ),
     ];
@@ -147,6 +147,9 @@ class FilterBar extends ConsumerWidget {
     required Widget avatar,
     required ValueChanged<bool> onSelected,
   }) {
+    final brightness = Theme.of(context).brightness;
+    final chipFill = AppTheme.glassChipFill(brightness);
+
     return FilterChip(
       avatar: avatar,
       label: Text(
@@ -159,17 +162,17 @@ class FilterBar extends ConsumerWidget {
       ),
       selected: selected,
       onSelected: onSelected,
-      backgroundColor: Colors.white,
+      backgroundColor: chipFill,
       selectedColor: selectedColor,
       checkmarkColor: checkmarkColor,
       side: BorderSide(
         color: selected
             ? checkmarkColor.withValues(alpha: 0.55)
-            : AppTheme.slate.withValues(alpha: 0.35),
+            : AppTheme.slate.withValues(alpha: 0.28),
         width: selected ? 1.5 : 1,
       ),
-      elevation: selected ? 1 : 0,
-      pressElevation: 2,
+      elevation: 0,
+      pressElevation: 0,
       showCheckmark: selected,
       padding: const EdgeInsets.symmetric(horizontal: 4),
     );

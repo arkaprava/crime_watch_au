@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../models/crime_incident.dart';
+import '../providers/providers.dart';
 import '../theme/app_theme.dart';
+import 'glass_surface.dart';
 
 /// Bottom sheet showing full details for a single incident or aggregate record.
 class IncidentDetailSheet extends StatelessWidget {
@@ -11,11 +14,37 @@ class IncidentDetailSheet extends StatelessWidget {
   final CrimeIncident incident;
 
   static Future<void> show(BuildContext context, CrimeIncident incident) {
+    final container = ProviderScope.containerOf(context);
+    final resolved = container
+        .read(crimeSessionCacheProvider)
+        .resolve(incident);
+
     return showModalBottomSheet(
       context: context,
-      showDragHandle: true,
+      showDragHandle: false,
       isScrollControlled: true,
-      builder: (_) => IncidentDetailSheet(incident: incident),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.2),
+      builder: (sheetContext) => GlassSurface(
+        elevated: true,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.slate.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            IncidentDetailSheet(incident: resolved),
+          ],
+        ),
+      ),
     );
   }
 
@@ -158,8 +187,9 @@ class IncidentDetailSheet extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppTheme.mist,
+                  color: AppTheme.glassChipFill(theme.brightness),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.slate.withValues(alpha: 0.15)),
                 ),
                 child: Text(
                   incident.description!,
@@ -185,8 +215,9 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppTheme.mist,
+        color: AppTheme.glassChipFill(Theme.of(context).brightness),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.slate.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

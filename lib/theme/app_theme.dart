@@ -7,6 +7,41 @@ abstract final class AppTheme {
   static const Color slate = Color(0xFF415A77);
   static const Color mist = Color(0xFFE8EEF4);
 
+  /// Backdrop blur strength for frosted glass panels.
+  static const double glassBlurSigma = 16;
+
+  static Color glassFill(Brightness brightness, {bool elevated = false}) {
+    return switch (brightness) {
+      Brightness.dark => elevated
+          ? const Color(0xCC1B2838)
+          : const Color(0xB31B2838),
+      Brightness.light => elevated
+          ? const Color(0xD9FFFFFF)
+          : const Color(0xB8FFFFFF),
+    };
+  }
+
+  static Color glassChipFill(Brightness brightness) {
+    return switch (brightness) {
+      Brightness.dark => const Color(0x99243447),
+      Brightness.light => const Color(0x8CFFFFFF),
+    };
+  }
+
+  static Color glassBorder(Brightness brightness) {
+    return switch (brightness) {
+      Brightness.dark => const Color(0x66E8EEF4),
+      Brightness.light => const Color(0x99FFFFFF),
+    };
+  }
+
+  static Color glassFabFill(Brightness brightness) {
+    return switch (brightness) {
+      Brightness.dark => const Color(0xE6FCA311),
+      Brightness.light => const Color(0xE61B2838),
+    };
+  }
+
   static ThemeData light() {
     final scheme = ColorScheme.fromSeed(
       seedColor: navy,
@@ -41,17 +76,17 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: glassChipFill(Brightness.light),
         hintStyle: TextStyle(color: slate.withValues(alpha: 0.7)),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: slate.withValues(alpha: 0.2)),
+          borderSide: BorderSide(color: slate.withValues(alpha: 0.18)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: slate.withValues(alpha: 0.2)),
+          borderSide: BorderSide(color: slate.withValues(alpha: 0.18)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -60,22 +95,28 @@ abstract final class AppTheme {
       ),
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        side: BorderSide(color: slate.withValues(alpha: 0.35)),
+        side: BorderSide(color: slate.withValues(alpha: 0.28)),
         labelStyle: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
           color: navy,
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: glassChipFill(Brightness.light),
         padding: const EdgeInsets.symmetric(horizontal: 4),
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: navy,
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: glassFabFill(Brightness.light),
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: glassBorder(Brightness.light)),
+        ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
@@ -99,6 +140,7 @@ abstract final class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
+      scaffoldBackgroundColor: const Color(0xFF0F1419),
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         elevation: 0,
@@ -112,24 +154,26 @@ abstract final class AppTheme {
       ),
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: glassChipFill(Brightness.dark),
+        side: BorderSide(color: slate.withValues(alpha: 0.4)),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
+        backgroundColor: glassFabFill(Brightness.dark),
+        foregroundColor: navy,
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: glassBorder(Brightness.dark)),
+        ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
       ),
     );
   }
-
-  static List<BoxShadow> cardShadow(BuildContext context) => [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.08),
-          blurRadius: 16,
-          offset: const Offset(0, 4),
-        ),
-      ];
 }

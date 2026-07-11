@@ -1,30 +1,28 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import 'glass_surface.dart';
 
-/// Elevated white card used for floating map overlays.
+/// Frosted glass card used for floating map overlays.
 class SurfaceCard extends StatelessWidget {
   const SurfaceCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(12),
     this.margin,
+    this.elevated = false,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry? margin;
+  final bool elevated;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: margin,
+    return GlassSurface(
       padding: padding,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.cardShadow(context),
-      ),
+      margin: margin,
+      elevated: elevated,
       child: child,
     );
   }

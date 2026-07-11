@@ -35,6 +35,7 @@ class SuburbCrimeOverlay extends ConsumerWidget {
         return SurfaceCard(
           padding: EdgeInsets.zero,
           margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          elevated: true,
           child: Column(
             children: [
               _Header(
@@ -211,8 +212,9 @@ class _Header extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppTheme.amber.withValues(alpha: 0.15),
+                  color: AppTheme.glassChipFill(theme.brightness),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.amber.withValues(alpha: 0.25)),
                 ),
                 child: const Icon(Icons.place, color: AppTheme.navy, size: 20),
               ),

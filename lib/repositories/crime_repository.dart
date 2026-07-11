@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:graphql/client.dart';
 
 import '../config/app_config.dart';
 import '../data/demo_incidents.dart';
 import '../graphql/incidents_query.dart';
 import '../models/crime_incident.dart';
+import '../services/crime_local_database.dart';
+import '../services/crime_session_cache.dart';
 import '../services/crime_query_cache.dart';
 import '../services/suburb_geocode_service.dart';
+import '../utils/crime_stats.dart';
 
 /// Fetches crime incidents from the Crime Service GraphQL API.
 class CrimeRepository {
@@ -13,14 +18,22 @@ class CrimeRepository {
     this._client, {
     SuburbGeocodeService? geocodeService,
     CrimeQueryCache? cache,
+    CrimeLocalDatabase? localDatabase,
+    CrimeSessionCache? sessionCache,
   })  : _geocodeService = geocodeService ?? SuburbGeocodeService(),
-        _cache = cache ?? CrimeQueryCache();
+        _cache = cache ?? CrimeQueryCache(),
+        _localDatabase = localDatabase,
+        _sessionCache = sessionCache;
 
   final GraphQLClient _client;
   final SuburbGeocodeService _geocodeService;
   final CrimeQueryCache _cache;
+  final CrimeLocalDatabase? _localDatabase;
+  final CrimeSessionCache? _sessionCache;
 
   CrimeQueryCache get cache => _cache;
+  CrimeLocalDatabase? get localDatabase => _localDatabase;
+  CrimeSessionCache? get sessionCache => _sessionCache;
 
   Future<List<CrimeIncident>> fetchIncidents({
     required GeoBounds bounds,
@@ -30,34 +43,40 @@ class CrimeRepository {
   }) async {
     if (AppConfig.useDemoData) {
       await Future<void>.delayed(const Duration(milliseconds: 400));
-      return buildDemoIncidents()
+      final incidents = buildDemoIncidents()
           .where((i) => i.isMappable && bounds.contains(i.latitude!, i.longitude!))
           .where(filters.matches)
           .toList();
+      _persistAndCache(
+        incidents,
+        areaKey: CrimeAreaKeys.viewport(bounds, state: filters.state),
+      );
+      return incidents;
     }
 
     final merged = <String, CrimeIncident>{};
 
-    final nearIncidents = await _fetchNearIncidents(
+    final nearFuture = _fetchNearIncidents(
       bounds: bounds,
       state: filters.state,
       refresh: refresh,
     );
-    _addIncidents(merged, nearIncidents);
-
     final city = area?.city;
-    if (city != null && city.isNotEmpty) {
-      final cityIncidents = await _fetchCityIncidents(
-        city: city,
-        state: area?.state ?? filters.state,
-        refresh: refresh,
-      );
-      _addIncidents(merged, cityIncidents);
-    }
+    final cityFuture = city != null && city.isNotEmpty
+        ? _fetchCityIncidents(
+            city: city,
+            state: area?.state ?? filters.state,
+            refresh: refresh,
+          )
+        : Future<List<CrimeIncident>>.value(const []);
+
+    final results = await Future.wait([nearFuture, cityFuture]);
+    _addIncidents(merged, results[0]);
+    _addIncidents(merged, results[1]);
 
     final resolved = await _geocodeService.resolveCoordinates(merged.values.toList());
 
-    return resolved
+    final filtered = resolved
         .where(filters.matches)
         .where(
           (i) =>
@@ -67,6 +86,14 @@ class CrimeRepository {
                   i.suburb?.toLowerCase() == city.toLowerCase()),
         )
         .toList();
+
+    _persistAndCache(
+      filtered,
+      areaKey: CrimeAreaKeys.viewport(bounds, state: filters.state),
+    );
+    _saveLastViewport(bounds);
+
+    return filtered;
   }
 
   static const _pageSize = 200;
@@ -83,67 +110,110 @@ class CrimeRepository {
   }) async {
     if (AppConfig.useDemoData) {
       await Future<void>.delayed(const Duration(milliseconds: 300));
-      return buildDemoIncidents()
+      final incidents = buildDemoIncidents()
           .where(
             (i) => i.suburb?.toLowerCase() == city.toLowerCase(),
           )
           .where(filters.matches)
           .toList();
+      _persistAndCache(
+        incidents,
+        areaKey: CrimeAreaKeys.suburb(city, state),
+        suburb: city,
+        state: state,
+      );
+      return incidents;
     }
 
     final merged = <String, CrimeIncident>{};
-    var currentOffset = offset;
     final pageLimit = limit.clamp(1, _pageSize);
     final resolvedState = state;
 
-    while (merged.length < _maxRecords) {
-      final cacheKey = CrimeQueryCache.suburbPageKey(
-        city: city,
-        state: resolvedState,
-        limit: pageLimit,
-        offset: currentOffset,
-      );
+    final firstPage = await _fetchSuburbPageCached(
+      city: city,
+      state: resolvedState,
+      filters: filters,
+      limit: pageLimit,
+      offset: offset,
+      refresh: refresh,
+    );
 
-      List<CrimeIncident> pageIncidents;
-      if (!refresh) {
-        final cached = _cache.get(cacheKey);
-        if (cached != null) {
-          pageIncidents = cached;
-        } else {
-          pageIncidents = await _querySuburbPage(
+    for (final incident in firstPage) {
+      merged[incident.id] = incident;
+    }
+
+    if (firstPage.length >= pageLimit && merged.length < _maxRecords) {
+      final remainingOffsets = <int>[];
+      var nextOffset = offset + firstPage.length;
+      while (remainingOffsets.length < 4 && nextOffset < _maxRecords) {
+        remainingOffsets.add(nextOffset);
+        nextOffset += pageLimit;
+      }
+
+      final pages = await Future.wait(
+        remainingOffsets.map(
+          (pageOffset) => _fetchSuburbPageCached(
             city: city,
             state: resolvedState,
             filters: filters,
             limit: pageLimit,
-            offset: currentOffset,
-          );
-          _cache.put(cacheKey, pageIncidents);
+            offset: pageOffset,
+            refresh: refresh,
+          ),
+        ),
+      );
+
+      for (final page in pages) {
+        for (final incident in page) {
+          merged[incident.id] = incident;
         }
-      } else {
-        pageIncidents = await _querySuburbPage(
-          city: city,
-          state: resolvedState,
-          filters: filters,
-          limit: pageLimit,
-          offset: currentOffset,
-        );
-        _cache.put(cacheKey, pageIncidents);
       }
-
-      if (pageIncidents.isEmpty) break;
-
-      for (final incident in pageIncidents) {
-        merged[incident.id] = incident;
-      }
-      currentOffset += pageIncidents.length;
-
-      if (pageIncidents.length < pageLimit) break;
     }
 
     final resolved =
         await _geocodeService.resolveCoordinates(merged.values.toList());
-    return resolved.where(filters.matches).toList()
+    final filtered = resolved.where(filters.matches).toList()
       ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
+    _persistAndCache(
+      filtered,
+      areaKey: CrimeAreaKeys.suburb(city, resolvedState),
+      suburb: city,
+      state: resolvedState,
+    );
+
+    return filtered;
+  }
+
+  Future<List<CrimeIncident>> _fetchSuburbPageCached({
+    required String city,
+    String? state,
+    required IncidentFilters filters,
+    required int limit,
+    required int offset,
+    required bool refresh,
+  }) async {
+    final cacheKey = CrimeQueryCache.suburbPageKey(
+      city: city,
+      state: state,
+      limit: limit,
+      offset: offset,
+    );
+
+    if (!refresh) {
+      final cached = _cache.get(cacheKey);
+      if (cached != null) return cached;
+    }
+
+    final incidents = await _querySuburbPage(
+      city: city,
+      state: state,
+      filters: filters,
+      limit: limit,
+      offset: offset,
+    );
+    _cache.put(cacheKey, incidents);
+    return incidents;
   }
 
   Future<List<CrimeIncident>> _fetchNearIncidents({
@@ -259,6 +329,32 @@ class CrimeRepository {
     for (final incident in incidents) {
       merged[incident.id] = incident;
     }
+  }
+
+  void _persistAndCache(
+    List<CrimeIncident> incidents, {
+    required String areaKey,
+    String? suburb,
+    String? state,
+  }) {
+    _sessionCache?.putAll(incidents);
+    final database = _localDatabase;
+    if (database == null) return;
+
+    unawaited(
+      database.saveFromIncidents(
+        areaKey: areaKey,
+        incidents: incidents,
+        suburb: suburb,
+        state: state,
+      ),
+    );
+  }
+
+  void _saveLastViewport(GeoBounds bounds) {
+    final database = _localDatabase;
+    if (database == null) return;
+    unawaited(database.saveLastViewport(bounds));
   }
 }
 

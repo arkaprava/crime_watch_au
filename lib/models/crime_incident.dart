@@ -319,6 +319,17 @@ class GeoBounds {
     return distance.clamp(0.5, 200.0);
   }
 
+  double get latSpanDegrees => (northEastLat - southWestLat).abs();
+
+  double get lngSpanDegrees => (northEastLng - southWestLng).abs();
+
+  /// The backend `crimesNearLocation` query is expensive; skip it when the map
+  /// is zoomed out beyond roughly city level (e.g. continental Australia view).
+  bool get supportsNearLocationQuery {
+    const maxSpanDegrees = 1.2;
+    return latSpanDegrees <= maxSpanDegrees && lngSpanDegrees <= maxSpanDegrees;
+  }
+
   bool contains(double lat, double lng) {
     return lat >= southWestLat &&
         lat <= northEastLat &&

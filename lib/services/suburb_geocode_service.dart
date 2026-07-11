@@ -9,6 +9,7 @@ class SuburbGeocodeService {
   SuburbGeocodeService({
     LocationSearchService? search,
     SuburbIndex? suburbIndex,
+    this.allowNetworkGeocode = false,
   })  : _search = search ?? LocationSearchService(),
         _suburbIndex = suburbIndex ?? SuburbIndex.instance;
 
@@ -16,18 +17,92 @@ class SuburbGeocodeService {
   final SuburbIndex _suburbIndex;
   final Map<String, ({double lat, double lng})> _cache = {};
 
+  /// When false (default for bulk fetches), only the local suburb index is
+  /// used. Network geocoding is reserved for explicit user search actions.
+  final bool allowNetworkGeocode;
+
   /// Fills in missing coordinates using suburb boundary centroid or cached suburb data.
   Future<List<CrimeIncident>> resolveCoordinates(
     List<CrimeIncident> incidents,
   ) async {
-    final resolved = <CrimeIncident>[];
+    if (incidents.isEmpty) return const [];
+
+    final suburbCoords = <String, ({double lat, double lng})>{};
+    final pendingNetwork = <String, CrimeIncident>{};
+
     for (final incident in incidents) {
-      resolved.add(await _resolveOne(incident));
+      if (incident.isMappable) continue;
+
+      final centroid = incident.suburbCentroid;
+      if (centroid != null) {
+        final key = _cacheKey(incident);
+        suburbCoords[key] = (lat: centroid.latitude, lng: centroid.longitude);
+        continue;
+      }
+
+      final suburb = incident.suburb;
+      if (suburb == null || suburb.isEmpty) continue;
+
+      final key = _cacheKey(incident);
+      final cached = _cache[key] ?? suburbCoords[key];
+      if (cached != null) {
+        suburbCoords[key] = cached;
+        continue;
+      }
+
+      final suburbEntry = _suburbIndex.findExact(suburb, incident.state);
+      if (suburbEntry?.hasCoordinates == true) {
+        suburbCoords[key] = (
+          lat: suburbEntry!.latitude!,
+          lng: suburbEntry.longitude!,
+        );
+        continue;
+      }
+
+      if (allowNetworkGeocode) {
+        pendingNetwork.putIfAbsent(key, () => incident);
+      }
     }
-    return resolved;
+
+    if (allowNetworkGeocode && pendingNetwork.isNotEmpty) {
+      await Future.wait(
+        pendingNetwork.entries.map((entry) async {
+          final incident = entry.value;
+          try {
+            final pending = LocationResult(
+              title: incident.suburb!,
+              subtitle: incident.state ?? '',
+              latitude: 0,
+              longitude: 0,
+              state: incident.state,
+              isSuburbLike: true,
+              needsGeocode: true,
+            );
+            final resolved = await _search.resolveSelection(pending);
+            suburbCoords[entry.key] = (
+              lat: resolved.latitude,
+              lng: resolved.longitude,
+            );
+          } catch (_) {
+            // Leave unresolved; map/list can still show the record.
+          }
+        }),
+      );
+    }
+
+    for (final entry in suburbCoords.entries) {
+      _cache[entry.key] = entry.value;
+    }
+
+    return incidents
+        .map((incident) => _applyResolvedCoordinates(incident, suburbCoords))
+        .toList(growable: false);
   }
 
-  Future<CrimeIncident> _resolveOne(CrimeIncident incident) async {
+  CrimeIncident _applyResolvedCoordinates(
+    CrimeIncident incident,
+    Map<String, ({double lat, double lng})> suburbCoords,
+  ) {
     if (incident.isMappable) return incident;
 
     final centroid = incident.suburbCentroid;
@@ -39,51 +114,16 @@ class SuburbGeocodeService {
       );
     }
 
-    final suburb = incident.suburb;
-    if (suburb == null || suburb.isEmpty) return incident;
+    final coords = suburbCoords[_cacheKey(incident)];
+    if (coords == null) return incident;
 
-    final cacheKey = '${suburb.toLowerCase()}|${incident.state ?? ''}';
-    final cached = _cache[cacheKey];
-    if (cached != null) {
-      return incident.withCoordinates(
-        cached.lat,
-        cached.lng,
-        resolvedBy: CoordinateSource.geocodedSuburb,
-      );
-    }
-
-    final suburbEntry = _suburbIndex.findExact(suburb, incident.state);
-    if (suburbEntry?.hasCoordinates == true) {
-      _cache[cacheKey] = (
-        lat: suburbEntry!.latitude!,
-        lng: suburbEntry.longitude!,
-      );
-      return incident.withCoordinates(
-        suburbEntry.latitude!,
-        suburbEntry.longitude!,
-        resolvedBy: CoordinateSource.geocodedSuburb,
-      );
-    }
-
-    try {
-      final pending = LocationResult(
-        title: suburb,
-        subtitle: incident.state ?? '',
-        latitude: 0,
-        longitude: 0,
-        state: incident.state,
-        isSuburbLike: true,
-        needsGeocode: true,
-      );
-      final resolved = await _search.resolveSelection(pending);
-      _cache[cacheKey] = (lat: resolved.latitude, lng: resolved.longitude);
-      return incident.withCoordinates(
-        resolved.latitude,
-        resolved.longitude,
-        resolvedBy: CoordinateSource.geocodedSuburb,
-      );
-    } catch (_) {
-      return incident;
-    }
+    return incident.withCoordinates(
+      coords.lat,
+      coords.lng,
+      resolvedBy: CoordinateSource.geocodedSuburb,
+    );
   }
+
+  String _cacheKey(CrimeIncident incident) =>
+      '${incident.suburb?.toLowerCase() ?? ''}|${incident.state ?? ''}';
 }
