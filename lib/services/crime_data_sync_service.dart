@@ -5,13 +5,11 @@ import 'crime_session_cache.dart';
 /// Refreshes persisted crime statistics when the app opens.
 class CrimeDataSyncService {
   CrimeDataSyncService({
-    required CrimeRepository repository,
-    required CrimeLocalDatabase database,
-    required CrimeSessionCache sessionCache,
+    required this._repository,
+    required this._database,
+    required this._sessionCache,
     this.maxConcurrentRefreshes = 2,
-  })  : _repository = repository,
-        _database = database,
-        _sessionCache = sessionCache;
+  });
 
   final CrimeRepository _repository;
   final CrimeLocalDatabase _database;

@@ -91,6 +91,62 @@ void main() {
       expect(areas.first.areaKey, 'suburb|armadale|WA');
     });
 
+    test('deleteArea removes a single area and its type counts', () async {
+      await database.saveFromIncidents(
+        areaKey: 'suburb|balga|WA',
+        suburb: 'Balga',
+        state: 'WA',
+        incidents: [
+          CrimeIncident(
+            id: '1',
+            title: 'Theft',
+            type: CrimeType.theft,
+            occurredAt: occurredAt,
+          ),
+        ],
+      );
+      await database.saveFromIncidents(
+        areaKey: 'suburb|armadale|WA',
+        suburb: 'Armadale',
+        state: 'WA',
+        incidents: [
+          CrimeIncident(
+            id: '2',
+            title: 'Assault',
+            type: CrimeType.assault,
+            occurredAt: occurredAt,
+          ),
+        ],
+      );
+
+      await database.deleteArea('suburb|balga|WA');
+
+      expect(await database.getAreaStats('suburb|balga|WA'), isNull);
+      final remaining = await database.listAreas();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.areaKey, 'suburb|armadale|WA');
+    });
+
+    test('clearAreas removes every stored area', () async {
+      await database.saveFromIncidents(
+        areaKey: 'suburb|balga|WA',
+        suburb: 'Balga',
+        state: 'WA',
+        incidents: [
+          CrimeIncident(
+            id: '1',
+            title: 'Theft',
+            type: CrimeType.theft,
+            occurredAt: occurredAt,
+          ),
+        ],
+      );
+
+      await database.clearAreas();
+
+      expect(await database.listAreas(), isEmpty);
+    });
+
     test('saveLastViewport round-trips bounds', () async {
       const bounds = GeoBounds(
         southWestLat: -32.1,

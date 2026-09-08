@@ -18,12 +18,10 @@ class CrimeRepository {
     this._client, {
     SuburbGeocodeService? geocodeService,
     CrimeQueryCache? cache,
-    CrimeLocalDatabase? localDatabase,
-    CrimeSessionCache? sessionCache,
+    this._localDatabase,
+    this._sessionCache,
   })  : _geocodeService = geocodeService ?? SuburbGeocodeService(),
-        _cache = cache ?? CrimeQueryCache(),
-        _localDatabase = localDatabase,
-        _sessionCache = sessionCache;
+        _cache = cache ?? CrimeQueryCache();
 
   final GraphQLClient _client;
   final SuburbGeocodeService _geocodeService;
