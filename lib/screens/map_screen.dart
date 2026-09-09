@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:platform_maps_flutter/platform_maps_flutter.dart';
 
 import '../config/app_config.dart';
+import '../models/area_crime_stats.dart';
 import '../models/crime_incident.dart';
 import '../models/location_result.dart';
 import '../providers/providers.dart';
+import '../services/suburb_index.dart';
 import '../theme/app_theme.dart';
 import '../widgets/filter_bar.dart';
 import '../widgets/incident_detail_sheet.dart';
@@ -17,6 +20,7 @@ import '../widgets/glass_surface.dart';
 import '../widgets/suburb_crime_overlay.dart';
 import '../widgets/surface_card.dart';
 import 'incident_list_screen.dart';
+import 'saved_areas_screen.dart';
 
 void _invalidateIncidentsCache(WidgetRef ref) {
   final bounds = ref.read(viewportProvider);
@@ -73,7 +77,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   void _onMapCreated(PlatformMapController controller) {
     _controller = controller;
-    Future.delayed(const Duration(milliseconds: 400), _refreshViewport);
+    _centerOnStartupLocation();
+  }
+
+  /// Centres the map on the user's location when it is available, otherwise on
+  /// the Sydney fallback, then loads incidents for wherever we landed.
+  Future<void> _centerOnStartupLocation() async {
+    Position? position;
+    try {
+      position = await ref.read(userLocationProvider.future);
+    } catch (_) {
+      position = null;
+    }
+    if (!mounted || _controller == null) return;
+
+    if (position != null) {
+      await _animateTo(position.latitude, position.longitude, zoom: 13);
+    } else {
+      await _animateTo(
+        AppConfig.fallbackLatitude,
+        AppConfig.fallbackLongitude,
+        zoom: 11,
+      );
+    }
+
+    // A tiny camera move may not trigger onCameraIdle, so refresh explicitly.
+    await _refreshViewport();
   }
 
   void _onCameraIdle() {
@@ -89,7 +118,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _goToUserLocation() async {
-    final position = ref.read(userLocationProvider).value;
+    // Re-evaluate permission/services each tap so the button recovers after the
+    // user grants access from system settings.
+    ref.invalidate(userLocationProvider);
+    Position? position;
+    try {
+      position = await ref.read(userLocationProvider.future);
+    } catch (_) {
+      position = null;
+    }
+
+    if (!mounted) return;
     if (position != null) {
       await _animateTo(position.latitude, position.longitude, zoom: 13);
       return;
@@ -125,6 +164,34 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       if (mounted) {
         await IncidentDetailSheet.show(context, selected);
       }
+    }
+  }
+
+  Future<void> _openSavedAreas() async {
+    final selected = await Navigator.of(context).push<AreaCrimeStats>(
+      MaterialPageRoute(builder: (_) => const SavedAreasScreen()),
+    );
+    if (selected == null || !mounted) return;
+
+    if (selected.isSuburb && (selected.suburb?.isNotEmpty ?? false)) {
+      ref.read(activeAreaProvider.notifier).setArea(
+            selected.suburb,
+            selected.state,
+          );
+      ref.invalidate(incidentsProvider);
+      ref.invalidate(suburbIncidentsProvider);
+
+      final entry =
+          SuburbIndex.instance.findExact(selected.suburb!, selected.state);
+      if (entry?.hasCoordinates == true) {
+        await _animateTo(entry!.latitude!, entry.longitude!);
+      }
+      return;
+    }
+
+    final coords = selected.viewportCoordinates;
+    if (coords != null) {
+      await _animateTo(coords.$1, coords.$2, zoom: 13);
     }
   }
 
@@ -166,6 +233,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             const Text(AppConfig.appName),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmarks_outlined, color: AppTheme.navy),
+            tooltip: 'Saved areas',
+            onPressed: _openSavedAreas,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Stack(
         children: [

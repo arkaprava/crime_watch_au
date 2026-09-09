@@ -8,6 +8,7 @@ A Flutter app for iOS and Android that shows crime incidents across Australia on
 - Tap a marker for full incident details (title, type, severity, location, time, description)
 - Filter by crime type and date range
 - List view sorted by recency; tapping an item jumps the map to that incident
+- Saved areas screen (app-bar bookmark icon): a locally stored tally of crime counts and types for every suburb / map area you've viewed, available offline; tap to re-open, swipe to delete
 - Centres on your location when permission is granted (falls back to Sydney)
 - Optional bundled demo data for offline UI testing
 
@@ -74,7 +75,7 @@ HTTP cleartext to localhost is enabled for development (`NSAllowsLocalNetworking
 | `lib/models/crime_incident.dart` | Incident, filters, bounds, enum mapping |
 | `lib/repositories/crime_repository.dart` | GraphQL client and `crimesNearLocation` fetching |
 | `lib/providers/providers.dart` | Riverpod state (filters, viewport, incidents, location) |
-| `lib/screens/` | Map and list screens |
+| `lib/screens/` | Map, incident list, and saved-areas screens |
 | `lib/widgets/` | Detail sheet, filter bar, marker icon factory |
 
 ## Development

@@ -8,8 +8,7 @@ import '../utils/crime_stats.dart';
 
 /// SQLite store for crime counts and types by area.
 class CrimeLocalDatabase {
-  CrimeLocalDatabase({DatabaseFactory? databaseFactory})
-      : _databaseFactory = databaseFactory;
+  CrimeLocalDatabase({this._databaseFactory});
 
   final DatabaseFactory? _databaseFactory;
   Database? _db;
@@ -167,6 +166,28 @@ class CrimeLocalDatabase {
       if (stats != null) results.add(stats);
     }
     return results;
+  }
+
+  /// Removes the stored statistics for a single area.
+  Future<void> deleteArea(String areaKey) async {
+    final db = _database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'type_counts',
+        where: 'area_key = ?',
+        whereArgs: [areaKey],
+      );
+      await txn.delete('areas', where: 'area_key = ?', whereArgs: [areaKey]);
+    });
+  }
+
+  /// Removes every stored area (keeps the last-viewport metadata).
+  Future<void> clearAreas() async {
+    final db = _database;
+    await db.transaction((txn) async {
+      await txn.delete('type_counts');
+      await txn.delete('areas');
+    });
   }
 
   Future<void> saveLastViewport(GeoBounds bounds) async {
